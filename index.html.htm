@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SISTEMA DE MONITOREO DE MEDIOS — v6 (Fix)</title>
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-treemap@2.2.3/dist/chartjs-chart-treemap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  
+  <style>
+    /* Estilos basados en el snippet y las clases usadas */
+    :root{
+      --blue-900:#0b2c4d; --blue-700:#155e9b; --blue-500:#1e78c2; --blue-300:#66a9e6; --blue-100:#e8f2fb;
+      --white:#ffffff; --muted:#d9e7f6;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--blue-100);color:#0f172a}
+    
+    header{background:linear-gradient(120deg,var(--blue-900),var(--blue-700));color:var(--white);padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 4px rgba(0,0,0,.1);}
+    .container{max-width:1400px;margin:0 auto;padding:1.5rem}
+    
+    /* Componentes */
+    .btn{padding:8px 16px;border:none;border-radius:4px;cursor:pointer;font-weight:600;transition:background-color .2s}
+    .btn.primary{background:var(--blue-500);color:var(--white)}
+    .btn.primary:hover{background:var(--blue-700)}
+    .btn.secondary{background:var(--blue-300);color:var(--blue-900)}
+    .btn.secondary:hover{background:var(--blue-500);color:var(--white)}
+    .btn.ghost{background:transparent;color:var(--blue-500);padding:8px}
+    .btn.ghost:hover{background:var(--blue-100)}
+    .btn.sm{padding:4px 8px;font-size:.8rem}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+
+    .toolbar{display:flex;gap:4px;align-items:center;}
+    .hint{color:#64748b;font-size:.9rem}
+    .link{color:var(--blue-500);text-decoration:none}
+    .link:hover{text-decoration:underline}
+
+    /* Formulario */
+    .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem}
+    label{display:block;margin-bottom:4px;font-weight:600;color:var(--blue-900)}
+    input,select,textarea{width:100%;padding:10px;border:1px solid var(--muted);border-radius:4px;background:var(--white);font-size:1rem}
+    textarea{resize:vertical;min-height:100px}
+    .form-actions{margin-top:20px;display:flex;gap:10px;justify-content:flex-end}
+    
+    /* Tarjetas y Pilas */
+    .card{background:var(--white);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.05);padding:1.5rem}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+    .grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem}
+    .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+    
+    .pill{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.75rem;font-weight:700;text-transform:capitalize;margin-right:4px;color:var(--blue-900);background:var(--blue-100);}
+    .pill--atender{background:#e53935;color:var(--white)}
+    .pill--seguimiento{background:#fb8c00;color:var(--white)}
+    .pill--monitoreo{background:#43a047;color:var(--white)}
+
+    /* Tabla */
+    table{width:100%;border-collapse:collapse;margin-top:15px;background:var(--white)}
+    th,td{padding:12px;text-align:left;border-bottom:1px solid var(--muted)}
+    th{background:var(--blue-900);color:var(--white);font-size:.9rem;text-transform:uppercase}
+    tr:hover{background:var(--blue-100)}
+    .table-actions{display:flex;justify-content:space-between;align-items:center;margin-top:15px;}
+    .pagination-controls{display:flex;gap:5px;align-items:center}
+    
+    /* Carrusel */
+    .carousel-wrapper{display:flex;overflow:hidden;gap:10px;margin-top:10px;}
+    .carousel-nav{display:flex;justify-content:space-between;align-items:center;margin-top:15px;}
+    #cardCarousel > .card { flex: 0 0 calc(25% - 7.5px); }
+    
+    /* Modal */
+    .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);display:none;justify-content:center;align-items:center;z-index:1000}
+    .modal-content{background:var(--white);padding:25px;border-radius:8px;width:90%;max-width:600px;box-shadow:0 4px 6px rgba(0,0,0,.1)}
+    .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;border-bottom:1px solid var(--muted);padding-bottom:10px;}
+  </style>
+</head>
+<body>
+
+  <header>
+    <div style="font-size:1.5rem;font-weight:700;">SISTEMA DE MONITOREO</div>
+    <div class="toolbar">
+      <button id="tabHome" class="btn secondary">Tablero</button>
+      <button id="tabForm" class="btn ghost">Registrar Post</button>
+    </div>
+  </header>
+
+  <div class="container">
+    
+    <div id="homeView">
+      <div class="card" style="margin-bottom:1.5rem;">
+        <h2 style="margin-top:0; color:var(--blue-700);">Filtros de Búsqueda 🔍</h2>
+        <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+          <div><label for="fTextSearch">Buscar en Contenido/Links</label><input type="text" id="fTextSearch" placeholder="Texto, link, etc."></div>
+          <div><label for="fCategory">Categoría</label><select id="fCategory"><option value="">Todas</option><option value="atender">ATENDER</option><option value="seguimiento">SEGUIMIENTO</option><option value="monitoreo">MONITOREO</option></select></div>
+          <div><label for="fFollowUpStatus">Estado de Seguimiento</label><select id="fFollowUpStatus"><option value="">Todos</option><option value="pendiente">Pendiente</option><option value="registrado">Registrado</option><option value="enviado_compartido">Enviado/Compartido</option><option value="en_proceso_averiguacion">En proceso averiguación</option><option value="archivado">Archivado</option></select></div>
+          <div><label for="fMentioned">Institución</label><input type="text" id="fMentioned" placeholder="Ej: Ministerio"></div>
+          <div><label for="fPersons">Personas Mencionadas</label><input type="text" id="fPersons" placeholder="Ej: Juan Pérez"></div>
+          <div><label for="fAuthor">Autor/Fuente</label><input type="text" id="fAuthor" placeholder="Ej: Periódico"></div>
+          <div><label for="fDateFrom">Desde (Fecha)</label><input type="date" id="fDateFrom"></div>
+          <div><label for="fDateTo">Hasta (Fecha)</label><input type="date" id="fDateTo"></div>
+        </div>
+        <div class="toolbar" style="margin-top:15px; justify-content: flex-end; gap: 8px;">
+            <div class="toolbar">
+                <button class="btn sm secondary" id="quick7Days" data-range="7">Últimos 7 días</button>
+                <button class="btn sm secondary" id="quickThisMonth" data-range="month">Este Mes</button>
+            </div>
+            <button id="applyFilters" class="btn primary">Aplicar Filtros</button>
+            <button id="resetFilters" class="btn ghost">Reiniciar</button>
+        </div>
+      </div>
+      
+      <div class="grid-3" style="margin-bottom:1.5rem;">
+        <div class="card" style="padding:15px; font-size:1.5rem; font-weight:700; color:var(--blue-900); text-align:center;">
+          Total Posts: <span id="totalPosts">0</span>
+        </div>
+        <button id="exportExcel" class="btn secondary">Exportar a Excel 📊</button>
+        <button id="exportPDFDash" class="btn secondary">Exportar Tablero a PDF 📄</button>
+        <button id="importExcelBtn" class="btn secondary">Importar desde Excel 📥</button>
+        <input type="file" id="excelFile" style="display:none;" accept=".xlsx, .xls">
+      </div>
+
+      <h3 style="color:var(--blue-700); margin-top: 0;">Últimos Posts Registrados</h3>
+      <div class="carousel-nav">
+          <button id="prevSlide" class="btn sm ghost">← Anterior</button>
+          <div id="carInfo" class="hint"></div>
+          <button id="nextSlide" class="btn sm ghost">Siguiente →</button>
+      </div>
+      <div class="carousel-wrapper">
+        <div id="cardCarousel" style="display:flex; gap:10px; width:100%;">
+          </div>
+      </div>
+      <div class="carousel-nav" style="margin-top:5px;">
+          <button id="prevSlide2" class="btn sm ghost">← Anterior</button>
+          <span></span>
+          <button id="nextSlide2" class="btn sm ghost">Siguiente →</button>
+      </div>
+
+      <h3 style="color:var(--blue-700); margin-top:2rem;">Estadísticas de Monitoreo</h3>
+      <div class="grid-2" style="margin-bottom:1.5rem;">
+        <div class="card" style="height:350px;"><canvas id="byCategory"></canvas><div class="hint" style="text-align:center;">Posts por Categoría</div></div>
+        <div class="card" style="height:350px;"><canvas id="byDate"></canvas><div class="hint" style="text-align:center;">Posts por Día</div></div>
+        <div class="card" style="height:350px;"><canvas id="byMentioned"></canvas><div class="hint" style="text-align:center;">Top 5 Instituciones Mencionadas</div></div>
+        <div class="card" style="height:350px;"><canvas id="byAuthor"></canvas><div class="hint" style="text-align:center;">Top 5 Autores/Fuentes</div></div>
+        
+        <div class="card" style="height:350px;"><canvas id="byNetwork"></canvas><div class="hint" style="text-align:center;">Posts por Red Social (Rosca)</div></div>
+        <div class="card" style="height:350px;"><canvas id="byStatusRadar"></canvas><div class="hint" style="text-align:center;">Posts por Estado de Seguimiento (Radar)</div></div>
+      </div>
+
+      <h3 style="color:var(--blue-700);">Detalle de Publicaciones</h3>
+      <div class="table-actions">
+        <div class="toolbar">
+            <label for="pageSize" style="margin-right:5px; font-weight:normal;">Mostrar</label>
+            <select id="pageSize" style="width:70px; padding: 4px;">
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+            </select>
+            <span style="margin-left: 10px; margin-right:5px;">Buscar:</span>
+            <input type="text" id="tableSearch" placeholder="Búsqueda rápida en tabla" style="width:200px; padding: 4px;">
+            <label for="tableField" style="margin-left: 10px; margin-right:5px; font-weight:normal;">Campo:</label>
+            <select id="tableField" style="width:100px; padding: 4px;">
+            <option value="">Todos</option>
+            <option value="date">Fecha</option>
+            <option value="author">Autor</option>
+            <option value="mentioned">Institución</option>
+            <option value="category">Categoría</option>
+            <option value="network">Red Social</option> <option value="status">Estado de Seguimiento</option> </select>
+            </select>
+        </div>
+        <div class="pagination-controls">
+            <button class="btn sm ghost" data-act="pgPrev" id="pgPrev">←</button>
+            <span id="pgInfo" class="hint">Página 1 de 1</span>
+            <button class="btn sm ghost" data-act="pgNext" id="pgNext">→ </button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Estado</th>
+                <th>Autor/Fuente</th>
+                <th>Red Social</th> <th>Menciones (Inst. / Pers.)</th>
+                <th>Categoría</th>
+                <th>Descripción (Snippet)</th>
+                <th>Enlace</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="rows">
+              </tbody>
+          </table>
+      </div>
+      <div class="table-actions">
+        <div class="hint"><button id="clearDBBtn" class="btn sm ghost" style="color:#e53935">Borrar toda la Base de Datos</button></div>
+        <div class="pagination-controls">
+            <button class="btn sm ghost" data-act="pgPrev">←</button>
+            <span class="hint"></span>
+            <button class="btn sm ghost" data-act="pgNext">→</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="formView" hidden>
+      <div class="card">
+        <h2 style="margin-top:0; color:var(--blue-700);">Registro / Edición de Publicación</h2>
+        <form id="postForm">
+          <div class="form-grid">
+            <div><label for="link">Enlace Original (URL) *</label><input type="url" id="link" required></div>
+            <div><label for="date">Fecha de Publicación *</label><input type="date" id="date" required></div>
+            <div><label for="author">Autor/Fuente *</label><input type="text" id="author" required></div>
+            
+            <div>
+                <label for="network">Red Social / Medio *</label>
+                <select id="network" required>
+                    <option value="">Selecciona...</option>
+                    <option value="X">X (Twitter)</option>
+                    <option value="Instagram">Instagram</option>
+                    <option value="YouTube">YouTube</option>
+                    <option value="TikTok">TikTok</option>
+                    <option value="Web/Otro">Web/Otro</option>
+                </select>
+            </div>
+            
+            <div><label for="category">Categoría *</label><select id="category" required><option value="">Selecciona...</option><option value="atender">ATENDER (Rojo)</option><option value="seguimiento">SEGUIMIENTO (Naranja)</option><option value="monitoreo">MONITOREO (Verde)</option></select></div>
+          </div>
+          <div class="form-grid">
+            <div><label for="mentioned">Institución Mencionada *</label><select id="mentioned" required><option value="">Cargando...</option></select></div>
+            <div><label for="persons">Personas Mencionadas</label><input type="text" id="persons" placeholder="Nombres separados por coma"></div>
+          </div>
+          <label for="desc" style="margin-top:10px;">Descripción (Resumen / Contenido Principal) *</label>
+          <textarea id="desc" required></textarea>
+          <div class="form-actions">
+            <button type="button" id="clearForm" class="btn ghost">Limpiar Formulario</button>
+            <button type="submit" id="saveBtn" class="btn primary">Guardar</button>
+          </div>
+        </form>
+      </div>
+      <div style="margin-top:15px; text-align:right;"><button id="backHome" class="btn ghost">← Volver al Tablero</button></div>
+    </div>
+
+  </div>
+
+  <div id="followUpModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="margin:0; color:var(--blue-900);">Seguimiento de Post: <span id="fuPostTitle"></span></h3>
+        <button id="closeFuModal" class="btn sm ghost">✕</button>
+      </div>
+      <input type="hidden" id="fuPostId">
+      
+      <div style="text-align:center; margin-bottom:15px; padding:10px; border-radius:4px; background:var(--blue-100);" id="currentStatusDisplay"></div>
+      
+      <div style="border:1px solid var(--muted); padding:15px; border-radius:4px; margin-bottom:15px;">
+        <h4 style="margin-top:0; color:var(--blue-700);">Nuevo Seguimiento</h4>
+        <div class="form-grid" style="grid-template-columns: 1fr;">
+            <div><label for="fuStatus">Estado *</label><select id="fuStatus" required><option value="">Selecciona...</option><option value="enviado_compartido">Enviado/Compartido</option><option value="en_proceso_averiguacion">En proceso averiguación</option><option value="archivado">Archivado</option></select></div>
+        </div>
+        <label for="fuComment" style="margin-top:10px;">Comentario de Seguimiento *</label>
+        <textarea id="fuComment" required></textarea>
+        <div class="form-actions" style="justify-content:flex-start; margin-top:10px;">
+            <button id="saveFollowUp" class="btn primary">Registrar Seguimiento</button>
+        </div>
+      </div>
+      
+      <h4 style="margin-top:0; color:var(--blue-700);">Historial de Seguimiento</h4>
+      <div id="fuHistory" style="max-height:300px; overflow-y:auto;">
+        </div>
+
+    </div>
+  </div>
+
+
+  <script>
+    // --- CONSTANTES ---
+    const LS_KEY = 'xposts_db_v1';
+    const $ = (sel)=>document.querySelector(sel);
+    Chart.register(ChartDataLabels); // Registrar el plugin de etiquetas
+    
+    const INSTITUTIONS = [
+      "Vicepresidencia de la República","Ministerio de Relaciones Exteriores","Ministerio de Gobernación","Ministerio de la Defensa Nacional","Ministerio de Finanzas Públicas","Ministerio de Educación","Ministerio de Salud Pública y Asistencia Social","Ministerio de Trabajo y Previsión Social","Ministerio de Economía","Ministerio de Agricultura, Ganadería y Alimentación","Ministerio de Comunicaciones, Infraestructura y Vivienda","Ministerio de Energía y Minas","Ministerio de Cultura y Deportes","Ministerio de Ambiente y Recursos Naturales","Ministerio de Desarrollo Social","Secretaría General de la Presidencia","Secretaría Privada de la Presidencia","Secretaría de Coordinación Ejecutiva de la Presidencia","Secretaría de Comunicación Social de la Presidencia","Secretaría de Inteligencia Estratégica del Estado","Secretaría de Planificación y Programación de la Presidencia","Secretaría de Asuntos Administrativos y de Seguridad","Secretaría Presidencial de la Mujer","Secretaría de Seguridad Social de la Presidencia","Secretaría Ejecutiva de la Comisión Contra las Adicciones y el Tráfico Ilícito de Drogas","Secretaría de Obras Sociales de la Esposa del Presidente","Secretaría Nacional de Ciencia y Tecnología","Secretaría de Seguridad Alimentaria y Nutricional","Secretaría contra la Violencia Sexual, Explotación y Trata de Personas","Autoridad para el Manejo Sustentable de la Cuenca del Lago de Atitlán","Autoridad para el Manejo Sustentable de la Cuenca del Lago de Atitlán y su Entorno","Consejo Nacional de la Juventud","Consejo Nacional de Áreas Protegidas","Oficina Nacional de Servicio Civil","Defensoría de la Mujer Indígena","Fondo de Desarrollo Indígena Guatemalteco","Secretaría Técnica del Consejo Nacional de Seguridad","Secretaría Nacional de Administración de Bienes de Extinción de Dominio","Inspectoría General del Sistema Nacional de Seguridad","Instituto Nacional de Estudios Estratégicos de Seguridad","Comisión Presidencial contra la Discriminación y el Racismo Contra los Pueblos Indígenas en Guatemala","Comisión Nacional contra la Corrupción","Comisión Presidencial por la Paz y los Derechos Humanos","Comisión Presidencial de Gobierno Abierto","Comisión Presidencial de Asuntos Municipales","Gobernación Departamental de Guatemala","Gobernación Departamental de El Progreso","Gobernación Departamental de Sacatepéquez","Gobernación Departamental de Chimaltenango","Gobernación Departamental de Escuintla","Gobernación Departamental de Santa Rosa","Gobernación Departamental de Sololá","Gobernación Departamental de Totonicapán","Gobernación Departamental de Quetzaltenango","Gobernación Departamental de Suchitepéquez","Gobernación Departamental de Retalhuleu","Gobernación Departamental de San Marcos","Gobernación Departamental de Huehuetenango","Gobernación Departamental de Quiché","Gobernación Departamental de Alta Verapaz","Gobernación Departamental de Baja Verapaz","Gobernación Departamental de Petén","Gobernación Departamental de Izabal","Gobernación Departamental de Zacapa","Gobernación Departamental de Chiquimula","Gobernación Departamental de Jalapa","Gobernación Departamental de Jutiapa"
+    ];
+
+    // FIX 1: Incluir 'registrado' y 'pendiente' en el objeto de etiquetas para usarlos en el Radar Chart y la tabla
+    const STATUS_LABELS = {
+      'pendiente': { label: 'Pendiente', color: '#757575', status: 'pendiente' },
+      'registrado': { label: 'Registrado', color: '#1e78c2', status: 'registrado' },
+      'enviado_compartido': { label: 'Enviado/Compartido', color: '#fb8c00', status: 'enviado_compartido' },
+      'en_proceso_averiguacion': { label: 'En proceso averiguación', color: '#43a047', status: 'en_proceso_averiguacion' },
+      'archivado': { label: 'Archivado', color: '#607d8b', status: 'archivado' }
+    };
+
+    // ======== LocalStorage API (FIX 2 aplicado aquí) ========
+    const API = {
+      async list(){ 
+          const db = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+          return db.map(p => ({ 
+              ...p, 
+              followUp: p.followUp || [],
+              network: p.network || 'Web/Otro' // FIX 2: Asegurar que 'network' exista para registros antiguos
+          }));
+      },
+      async create(row){ const db = await API.list(); db.push(row); localStorage.setItem(LS_KEY, JSON.stringify(db)); return {ok:true}; },
+      async update(id,row){ const db = await API.list(); const i=db.findIndex(x=>x.id===id); if(i>-1) db[i] = {...db[i],...row}; localStorage.setItem(LS_KEY, JSON.stringify(db)); return {ok:true}; },
+      async delete(id){ const db = await API.list(); const i=db.findIndex(x=>x.id===id); if(i>-1) db.splice(i,1); localStorage.setItem(LS_KEY, JSON.stringify(db)); return {ok:true}; }
+    };
+
+    // Estado de UI
+    let DB = [];
+    let FILTERS = {category:'',from:'',to:'',mentioned:'',persons:'',author:'',textSearch:'', followUpStatus:''}; 
+    let editingId = null;
+    let carouselIndex = 0;
+    const TABLE = { page:1, size:10, q:'', field:'' };
+
+    // Utils
+    const formatDateISO = (d)=> d.toISOString().split('T')[0];
+    const genId = ()=> (Date.now().toString(36) + Math.random().toString(36).slice(2,8));
+    
+    const inRangeIso = (dateStr, fromStr, toStr) => {
+        return (!fromStr || dateStr >= fromStr) && (!toStr || dateStr <= toStr);
+    };
+    
+    const normalizeCategory = (cat)=>{ 
+        const c=(cat||'').toLowerCase().trim(); 
+        if(['red','critico','crítico','atender'].includes(c)) return 'atender'; 
+        if(['orange','moderado','seguimiento'].includes(c)) return 'seguimiento'; 
+        if(['green','positivo','monitoreo'].includes(c)) return 'monitoreo'; 
+        return ['atender','seguimiento','monitoreo'].includes(c) ? c : ''; 
+    };
+    const escapeHtml = (s)=> String(s||'').replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+    const normalizeUrl = (u)=>{
+      try{ const x=new URL(u); x.hash=''; return x.toString().replace(/\/$/,'').toLowerCase(); }catch(e){ return (u||'').trim().toLowerCase(); }
+    }
+    
+    /**
+     * Identifica la Red Social a partir de un enlace.
+     * @param {string} link - URL del post.
+     * @returns {string} - Nombre de la red social o 'Web/Otro'.
+     */
+    function getSocialNetworkFromLink(link) {
+        if (!link) return '';
+        const url = link.toLowerCase();
+        if (url.includes('twitter.com') || url.includes('x.com')) return 'X';
+        if (url.includes('instagram.com')) return 'Instagram';
+        if (url.includes('youtube.com') || url.includes('youtu.be')) return 'YouTube';
+        if (url.includes('tiktok.com')) return 'TikTok';
+        return 'Web/Otro'; 
+    }
+
+    function getCurrentStatus(post){
+      // Si el array de seguimiento está vacío, el estado es Pendiente (se usa la constante STATUS_LABELS.pendiente)
+      if(!post.followUp || post.followUp.length === 0) return STATUS_LABELS.pendiente; 
+      
+      const lastFu = post.followUp.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      return STATUS_LABELS[lastFu.status] || { label: lastFu.status, color: '#90a4ae', status: lastFu.status };
+    }
+
+    function getFiltered(){
+      return DB.filter(r=>{
+        const okDate = inRangeIso(r.date, FILTERS.from, FILTERS.to);
+        const okCat = !FILTERS.category || r.category===FILTERS.category;
+        const okMen = !FILTERS.mentioned || r.mentioned.toLowerCase().includes(FILTERS.mentioned.toLowerCase());
+        const okPer = !FILTERS.persons || (r.persons || '').toLowerCase().includes(FILTERS.persons.toLowerCase()); 
+        const okAut = !FILTERS.author || r.author.toLowerCase().includes(FILTERS.author.toLowerCase());
+        
+        // Uso de r.network || '' para evitar undefined en el filtro de texto, aunque el FIX 2 ya lo maneja
+        const okTextSearch = !FILTERS.textSearch || [r.author,r.mentioned,r.persons,r.desc,r.link,r.network||''].some(v => String(v).toLowerCase().includes(FILTERS.textSearch.toLowerCase()));
+        
+        const status = getCurrentStatus(r).status;
+        const okStatus = !FILTERS.followUpStatus || status === FILTERS.followUpStatus || (FILTERS.followUpStatus === 'pendiente' && status === 'pendiente');
+        
+        return okCat && okDate && okMen && okPer && okAut && okTextSearch && okStatus;
+      });
+    }
+
+    function renderTable(){
+  // Esta función asume que getFiltered(), getCurrentStatus(), TABLE, DB, escapeHtml, 
+  // y los elementos de paginación están definidos en el script.
+  const filtered = getFiltered();
+  document.getElementById('totalPosts').textContent = filtered.length;
+  const q = (TABLE.q||'').toLowerCase().trim();
+  let rows;
+
+  if(q){
+      rows = filtered.filter(r=>{
+          // Obtener el estado actual del post para el filtrado
+          const currentStatus = getCurrentStatus(r).status; 
+          const currentStatusLabel = getCurrentStatus(r).label.toLowerCase(); 
+          
+          if(TABLE.field){
+              // Búsqueda específica por campo (incluyendo los nuevos: status y network)
+              const field = TABLE.field;
+              
+              if(field === 'status'){
+                  // Búsqueda por la etiqueta legible del estado o su clave interna
+                  return currentStatusLabel.includes(q) || currentStatus.includes(q); 
+              }
+              if(field === 'network'){
+                  // Búsqueda por Red Social
+                  return (r.network || '').toLowerCase().includes(q);
+              }
+              // Resto de campos que ya existían
+              return String(r[field]||'').toLowerCase().includes(q);
+          } 
+          
+          // Búsqueda rápida en todos los campos (Fallback si no hay campo seleccionado)
+          return [
+            r.author, r.mentioned, r.persons, r.desc, r.link, r.category, r.date, 
+            r.network || '', // Red Social
+            currentStatusLabel // Estado (Etiqueta legible)
+          ].some(v=> String(v).toLowerCase().includes(q));
+      });
+  }
+  else { 
+      rows = filtered.slice(); 
+  }
+  
+  const total = rows.length;
+  const pages = Math.max(1, Math.ceil(total / TABLE.size));
+  if(TABLE.page > pages) TABLE.page = pages; if(TABLE.page < 1) TABLE.page = 1;
+  const start = (TABLE.page-1)*TABLE.size;
+  // Ordenar por fecha descendente
+  const pageRows = rows.sort((a,b)=> new Date(b.date) - new Date(a.date)).slice(start, start+TABLE.size);
+  
+  const frag = document.createDocumentFragment();
+  pageRows.forEach(r=>{
+    const colorClass = (r.category === 'atender') ? 'pill--atender' : (r.category === 'seguimiento' ? 'pill--seguimiento' : 'pill--monitoreo');
+    const currentStatus = getCurrentStatus(r); 
+    
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.date}</td>
+      <td><span class="pill" style="background:${currentStatus.color}; color:#fff; font-weight:700;">${currentStatus.label}</span></td>
+      <td><span class="pill">${escapeHtml(r.author)}</span></td>
+      <td><span class="pill">${escapeHtml(r.network || 'N/A')}</span></td> 
+      <td>${escapeHtml(r.mentioned)} / ${escapeHtml(r.persons || 'N/A')}</td>
+      <td><span class="pill ${colorClass}">${r.category}</span></td>
+      <td>${escapeHtml(r.desc.substring(0, 50))}...</td>
+      <td><a class="link" href="${r.link}" target="_blank" rel="noopener">Abrir ↗</a></td>
+      <td style="white-space:nowrap" class="toolbar">
+        <button class="btn sm ghost" data-id="${r.id}" data-act="followup" title="Seguimiento">🔍</button>
+        <button class="btn sm" data-id="${r.id}" data-act="edit">✏️</button>
+        <button class="btn sm ghost" data-id="${r.id}" data-act="share">✉️</button>
+        <button class="btn sm ghost" data-id="${r.id}" data-act="pdf">🧾</button>
+        <button class="btn sm ghost" data-id="${r.id}" data-act="del">🗑️</button>
+      </td>`;
+    frag.appendChild(tr);
+  });
+  const tbody = document.getElementById('rows'); tbody.innerHTML=''; tbody.appendChild(frag);
+  
+  // Actualización de Paginación
+  document.getElementById('pgInfo').textContent = `Página ${TABLE.page} de ${pages} — ${total} registros`;
+  document.getElementById('pgPrev').disabled = TABLE.page<=1;
+  document.getElementById('pgNext').disabled = TABLE.page>=pages;
+}
+
+    // Charts
+    let charts = {};
+    function groupCount(arr, keyFn){ const m = new Map(); arr.forEach(x=>{ const k = keyFn(x); m.set(k,(m.get(k)||0)+1); }); return m; }
+    
+    // Configuración para el plugin de etiquetas
+    const dataLabelsConfig = {
+      color: '#fff',
+      textShadowBlur: 4,
+      textShadowColor: 'rgba(0, 0, 0, 0.5)',
+      formatter: (value, context) => value,
+      font: { weight: 'bold', size: 12 }
+    };
+
+    function makePieConfig(labels,data,label,colors){ 
+        return { 
+            type:'pie', 
+            plugins: [ChartDataLabels], // Agregar plugin
+            data:{ labels, datasets:[{ label, data, backgroundColor: colors }] }, 
+            options:{ 
+                responsive:true, 
+                maintainAspectRatio:false, 
+                plugins:{ legend:{position:'bottom'}, datalabels: { ...dataLabelsConfig, color: '#fff', textShadowColor: 'rgba(0, 0, 0, 0.7)' } } // Personalizar etiquetas para pie
+            } 
+        }; 
+    }
+    
+    function makeDoughnutConfig(labels,data,label,colors){ 
+        return { 
+            type:'doughnut', // Rosca
+            plugins: [ChartDataLabels],
+            data:{ labels, datasets:[{ label, data, backgroundColor: colors }] }, 
+            options:{ 
+                responsive:true, 
+                maintainAspectRatio:false, 
+                plugins:{ legend:{position:'bottom'}, datalabels: { ...dataLabelsConfig, color: '#fff', textShadowColor: 'rgba(0, 0, 0, 0.7)' } } 
+            } 
+        }; 
+    }
+    
+    function makeLineConfig(labels,data,label){ 
+      return { 
+        type:'line', 
+        plugins: [ChartDataLabels], // Agregar plugin
+        data:{ labels, datasets:[{ label, data, tension:0.25, borderWidth:2, pointRadius:4, borderColor:'#1e78c2', backgroundColor:'rgba(30,120,194,0.15)', fill:true }] }, 
+        options:{ 
+            responsive:true, 
+            maintainAspectRatio:false, 
+            plugins:{ legend:{display:false}, datalabels: { ...dataLabelsConfig, color: '#0b2c4d', anchor: 'end', align: 'top', textShadowColor: 'rgba(255, 255, 255, 0.7)' } }, // Personalizar etiquetas
+            scales:{ x:{ ticks:{color:'#0b2c4d'} }, y:{ beginAtZero:true, ticks:{color:'#0b2c4d'} } } 
+        } 
+      }; 
+    }
+    
+    function makeBarConfig(labels, data, label, isHorizontal = false) {
+        const axis = isHorizontal ? 'y' : 'x';
+        return {
+            type: 'bar', 
+            plugins: [ChartDataLabels], // Agregar plugin
+            data: { labels, datasets: [{ label, data, backgroundColor: '#1e78c2', borderColor: '#1e78c2', borderWidth: 1 }] },
+            options: { 
+                indexAxis: axis, 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { 
+                    legend: { display: false },
+                    datalabels: { 
+                        ...dataLabelsConfig, 
+                        color: isHorizontal ? '#0b2c4d' : '#fff', // Color de etiqueta
+                        anchor: isHorizontal ? 'end' : 'center', // Posición en barras horizontales
+                        align: isHorizontal ? 'right' : 'center', // Alineación en barras horizontales
+                        textShadowColor: isHorizontal ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+                    }
+                },
+                scales: { 
+                    x: { beginAtZero: true, grid: { display: !isHorizontal } }, 
+                    y: { beginAtZero: true, grid: { display: isHorizontal } } 
+                }
+            }
+        };
+    }
+    
+    function makeRadarConfig(labels, data, label) {
+        return {
+            type: 'radar',
+            plugins: [ChartDataLabels],
+            data: { 
+                labels, 
+                datasets: [{ 
+                    label, 
+                    data, 
+                    backgroundColor: 'rgba(30, 120, 194, 0.2)', 
+                    borderColor: '#1e78c2', 
+                    pointBackgroundColor: '#1e78c2',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: '#1e78c2',
+                    borderWidth: 2
+                }] 
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' },
+                    datalabels: {
+                        color: '#0b2c4d',
+                        font: { weight: 'bold', size: 12 },
+                        backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                        borderRadius: 4,
+                        padding: 6,
+                        anchor: 'center',
+                        align: 'center',
+                    }
+                },
+                scales: {
+                    r: {
+                        angleLines: { display: false },
+                        suggestedMin: 0,
+                        ticks: { 
+                            beginAtZero: true, 
+                            backdropColor: 'rgba(232, 242, 251, 0.8)', 
+                            color: '#0b2c4d',
+                            stepSize: 1
+                        },
+                        grid: { color: 'rgba(15, 23, 42, 0.1)' }
+                    }
+                }
+            }
+        };
+    }
+
+function refreshCharts(){
+      const rows = getFiltered();
+      const byCat = groupCount(rows, r=>r.category);
+      const byDt  = groupCount(rows, r=>r.date);
+      const byMen = groupCount(rows, r=>r.mentioned);
+      const byAut = groupCount(rows, r=>r.author);
+      
+      // NUEVOS AGRUPAMIENTOS
+      const byNetwork = groupCount(rows, r=>r.network); 
+      const byStatus = groupCount(rows, r=>getCurrentStatus(r).status); // Este cuenta 'registrado', 'pendiente', etc.
+
+      const CATEGORY_COLORS = { atender:'#e53935', seguimiento:'#fb8c00', monitoreo:'#43a047' };
+      const catLabels = Array.from(byCat.keys()); const catData = Array.from(byCat.values()); const catColors = catLabels.map(k=> CATEGORY_COLORS[k] || '#90caf9');
+      
+      const NETWORK_COLORS = { X:'#000000', Instagram:'#E1306C', YouTube:'#FF0000', TikTok:'#69C9D0', 'Web/Otro':'#0b2c4d' };
+      const networkLabels = Array.from(byNetwork.keys()); 
+      const networkData = Array.from(byNetwork.values()); 
+      const networkColors = networkLabels.map(k=> NETWORK_COLORS[k] || '#607d8b');
+
+      // DATOS PARA ESTADO (Radar) - CORRECCIÓN APLICADA: 
+      // Incluimos todos los estados definidos en STATUS_LABELS (incluyendo 'pendiente' y 'registrado')
+      // y los ordenamos para que 'Registrado' y 'Pendiente' sean visibles primero en el radar.
+      const allStatusKeys = Object.keys(STATUS_LABELS).sort((a,b)=>{
+          if(a==='registrado') return -1;
+          if(b==='registrado') return 1;
+          if(a==='pendiente') return -1;
+          if(b==='pendiente') return 1;
+          return 0;
+      });
+      
+      const radarLabels = allStatusKeys.map(s => STATUS_LABELS[s].label);
+      const radarData = allStatusKeys.map(key => byStatus.get(key) || 0); // Asigna 0 si el estado no tiene posts
+
+      const sortedDates = Array.from(byDt.keys()).sort();
+      const topInstitutions = Array.from(byMen.entries()).sort((a,b)=> b[1]-a[1]).slice(0,5);
+      const instLabels = topInstitutions.map(([k])=>k); const instData = topInstitutions.map(([,v])=>v);
+      const topAuthors = Array.from(byAut.entries()).sort((a,b)=> b[1]-a[1]).slice(0,5);
+      const autLabels = topAuthors.map(([k])=>k); const autData = topAuthors.map(([,v])=>v);
+      
+      const up = (id, cfg)=>{ const ctx = document.getElementById(id); if(!ctx) return; if(charts[id]) charts[id].destroy(); charts[id] = new Chart(ctx, cfg); };
+      
+      up('byCategory',  makePieConfig(catLabels, catData, 'Posts', catColors));
+      up('byDate', makeLineConfig(sortedDates, sortedDates.map(d=>byDt.get(d)), 'Posts'));
+      up('byMentioned', makeBarConfig(instLabels, instData, 'Posts por Institución', true)); 
+      up('byAuthor', makeBarConfig(autLabels, autData, 'Posts por Autor', true)); 
+      
+      up('byNetwork', makeDoughnutConfig(networkLabels, networkData, 'Posts por Red Social', networkColors)); 
+      up('byStatusRadar', makeRadarConfig(radarLabels, radarData, 'Posts por Estado')); 
+    }
+    
+    function renderCarousel(){
+      const cont = document.getElementById('cardCarousel');
+      const rows = getFiltered();
+      const pageSize = 4;
+      const totalItems = rows.length;
+      const pages = Math.max(1, Math.ceil(totalItems / pageSize));
+      if(carouselIndex >= totalItems && totalItems > 0) { carouselIndex = Math.max(0, totalItems - pageSize);} else if (totalItems === 0) { carouselIndex = 0; }
+      const page = rows.slice(carouselIndex, carouselIndex + pageSize);
+      cont.innerHTML = page.map(r=>{
+        const colorClass = (r.category === 'atender') ? 'pill--atender' : (r.category === 'seguimiento' ? 'pill--seguimiento' : 'pill--monitoreo');
+        const currentStatus = getCurrentStatus(r); 
+        return `
+        <div class="card" style="display:flex;flex-direction:column;gap:8px">
+          <div class="card-c" style="padding:12px">
+            <div class="hint" style="margin-bottom:6px">${r.date} • <span class="pill ${colorClass}">${r.category}</span></div>
+            <div style="font-weight:600;color:#0b2c4d;margin-bottom:4px">${escapeHtml(r.mentioned)} / ${escapeHtml(r.persons || 'N/A')}</div>
+            <div style="font-size:.9rem;margin-bottom:4px;">Autor: ${escapeHtml(r.author)} - Red: ${escapeHtml(r.network || 'N/A')}</div> <div style="font-size:.9rem;margin-bottom:8px">${escapeHtml(r.desc.substring(0, 100))}${r.desc.length > 100 ? '...' : ''}</div>
+            <div style="font-weight:600;font-size:.8rem; color:${currentStatus.color}">Estado: ${currentStatus.label}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px; margin-top: 8px;">
+              <a class="link" href="${r.link}" target="_blank" rel="noopener">Abrir ↗</a>
+              <div style="white-space:nowrap" class="toolbar">
+                <button class="btn sm ghost" data-id="${r.id}" data-act="followup" title="Seguimiento">🔍</button>
+                <button class="btn sm" data-id="${r.id}" data-act="edit">✏️</button>
+                <button class="btn sm ghost" data-id="${r.id}" data-act="share">✉️</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }).join('') || '<div class="hint">Sin datos para mostrar</div>';
+      const currentPage = Math.floor(carouselIndex / pageSize) + 1;
+      document.getElementById('carInfo').textContent = `Página ${currentPage} de ${pages} — ${totalItems} items`;
+      const prevDisable = carouselIndex <= 0;
+      const nextDisable = (carouselIndex + pageSize) >= totalItems;
+      ['prevSlide','prevSlide2'].forEach(id=>{ const b=document.getElementById(id); if(b) b.disabled = prevDisable; });
+      ['nextSlide','nextSlide2'].forEach(id=>{ const b=document.getElementById(id); if(b) b.disabled = nextDisable; });
+    }
+
+    function showHome(){ 
+      document.getElementById('followUpModal').style.display = 'none'; 
+      document.getElementById('homeView').hidden = false; 
+      document.getElementById('formView').hidden = true; 
+      editingId = null; 
+      document.getElementById('postForm').reset(); 
+      document.getElementById('tabHome').classList.add('secondary'); 
+      document.getElementById('tabForm').classList.remove('secondary'); 
+      document.getElementById('tabForm').classList.add('ghost'); 
+      document.getElementById('tabHome').classList.remove('ghost');
+      refreshAll();
+    }
+    function showForm(){ 
+      document.getElementById('followUpModal').style.display = 'none'; 
+      document.getElementById('homeView').hidden = true; 
+      document.getElementById('formView').hidden = false; 
+      document.getElementById('tabForm').classList.add('secondary'); 
+      document.getElementById('tabHome').classList.remove('secondary'); 
+      document.getElementById('tabHome').classList.add('ghost'); 
+      document.getElementById('tabForm').classList.remove('ghost'); 
+    }
+    function refreshAll(){ renderTable(); refreshCharts(); renderCarousel(); }
+
+    function renderFollowUpHistory(post){
+      const historyDiv = document.getElementById('fuHistory');
+      if (!post || !post.followUp || post.followUp.length === 0) { historyDiv.innerHTML = '<div class="hint">No hay comentarios de seguimiento.</div>'; return; }
+      const sortedFu = post.followUp.sort((a, b) => new Date(b.date) - new Date(a.date));
+      historyDiv.innerHTML = sortedFu.map(fu => {
+        const statusInfo = STATUS_LABELS[fu.status] || { label: fu.status, color: '#90a4ae' };
+        return `
+          <div style="border-bottom:1px solid #d9e7f6; padding:8px 0; margin-bottom:5px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:${statusInfo.color};font-weight:700;">
+              <span>${statusInfo.label}</span>
+              <div style="display:flex; gap: 8px; align-items:center;">
+                  <span class="hint" style="color:#607d8b;">${fu.date}</span>
+                  <button class="btn sm ghost" data-id="${post.id}" data-fuid="${fu.id}" data-act="delFu" title="Eliminar seguimiento" style="padding: 2px 5px; font-size: 0.7rem;">🗑️</button>
+              </div>
+            </div>
+            <p style="margin:4px 0;font-size:.9rem;">${escapeHtml(fu.comment)}</p>
+          </div>`;
+      }).join('');
+    }
+
+    async function syncDB(navigateHome = true){ DB = await API.list(); if(navigateHome) refreshAll(); else { renderTable(); refreshCharts(); renderCarousel(); } }
+
+    // ========== Exportar tablero a PDF ==========
+    async function exportDashboardPDF(){
+      const { jsPDF } = window.jspdf || {};
+      if(!jsPDF){ alert('No se encontró jsPDF. Verifica tu conexión.'); return; }
+      const node = document.getElementById('homeView');
+      // Clonar el nodo para asegurar que los gráficos se rendericen con datalabels
+      const tempNode = node.cloneNode(true);
+      tempNode.style.width = node.offsetWidth + 'px';
+      tempNode.style.position = 'absolute';
+      tempNode.style.top = '-9999px';
+      document.body.appendChild(tempNode);
+
+      // Los gráficos ya están renderizados en la UI visible, solo necesitamos el canvas
+      const canvas = await html2canvas(node, {scale:2, useCORS:true, logging: false}); // Usar el nodo original que tiene los gráficos con el plugin
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p','mm','a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth - 20; // márgenes
+      const imgHeight = canvas.height * imgWidth / canvas.width;
+      let y = 10;
+      if(imgHeight <= pageHeight - 20){
+        pdf.addImage(imgData, 'PNG', 10, y, imgWidth, imgHeight);
+      } else {
+        // dividir en múltiples páginas
+        let sY = 0; // fuente en px
+        const pagePxHeight = (canvas.width) * (pageHeight - 20) / (imgWidth);
+        while(sY < canvas.height){
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = canvas.width;
+          pageCanvas.height = Math.min(pagePxHeight, canvas.height - sY);
+          const ctx = pageCanvas.getContext('2d');
+          ctx.drawImage(canvas, 0, sY, canvas.width, pageCanvas.height, 0, 0, canvas.width, pageCanvas.height);
+          const pageImgData = pageCanvas.toDataURL('image/png');
+          if(sY>0) pdf.addPage();
+          pdf.addImage(pageImgData, 'PNG', 10, 10, imgWidth, (pageCanvas.height * imgWidth / canvas.width));
+          sY += pagePxHeight;
+        }
+      }
+      pdf.save('tablero_monitoreo.pdf');
+    }
+
+    // ========== Detección de duplicados al registrar ==========
+    function isDuplicate(row, currentId = null){
+      const linkNorm = normalizeUrl(row.link);
+      return DB.find(p => p.id !== currentId && (
+        normalizeUrl(p.link) === linkNorm
+        || (
+          (p.author||'').trim().toLowerCase() === (row.author||'').trim().toLowerCase()
+          && (p.date||'') === (row.date||'')
+          && (p.desc||'').trim().toLowerCase() === (row.desc||'').trim().toLowerCase()
+        )
+      ));
+    }
+
+    // 🔄 Función de Compartir (Web Share API con Fallback)
+    async function sharePost(post){
+        // Texto predefinido para el cuerpo/texto
+        const subject = 'Análisis de publicación para la prevención y combate de posibles actos de corrupción';
+        const fullText = [
+            'Importancia ALTA.',
+            'Estimado/a colaborador,',
+            '',
+            'Por este medio, les comparto la publicación identificada recientemente que podría estar relacionada con posibles irregularidades en la gestión pública.',
+            '',
+            'Es importante revisar y analizar el contenido para determinar si contiene elementos que requieran acciones preventivas o de verificación, con el fin de fortalecer los mecanismos institucionales de transparencia y rendición de cuentas.',
+            '',
+            'Agradezco su pronta atención y colaboración para efectuar el análisis correspondiente.',
+            '',
+            '——— Detalle del registro ——–',
+            `Fecha: ${post.date}`,
+            `Autor: ${post.author}`,
+            `Red Social: ${post.network}`, // INCLUIDO EN TEXTO DE COMPARTIR
+            `Institución: ${post.mentioned}`,
+            `Personas mencionadas: ${post.persons || 'N/A'}`,
+            `Categoría: ${post.category.toUpperCase()}`,
+            `Descripción: ${post.desc}`,
+            `Enlace: ${post.link}`
+        ].join('\n');
+
+        // 1. Intentar usar la Web Share API (Nativa)
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: subject,
+                    text: fullText,
+                    url: post.link,
+                });
+                console.log('Post compartido exitosamente con Web Share API.');
+                return; // Termina la función si el sharing nativo funciona
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.warn('Fallo Web Share API, usando fallback:', error);
+                }
+                // Continuar al fallback
+            }
+        }
+        
+        // 2. Fallback a Mailto (si Web Share no está disponible o falla)
+        const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(fullText)}`;
+        window.open(url, '_self');
+        console.log('Usando fallback a Mailto.');
+    }
+
+    // ========== PDF por post (adjuntarlo manualmente) ==========
+    async function createPdfForPost(post){
+      const { jsPDF } = window.jspdf || {};
+      if(!jsPDF){ alert('No se encontró jsPDF.'); return; }
+      const doc = new jsPDF();
+      const currentStatus = getCurrentStatus(post);
+      doc.setFontSize(18); doc.setTextColor(11,44,77); doc.text('Reporte de Monitoreo de Medios', 15, 15); doc.setDrawColor(30,120,194); doc.line(15, 18, 195, 18);
+      doc.setFontSize(12); doc.setTextColor(30,120,194); doc.text('Detalles del Post:', 15, 25);
+      doc.setFontSize(10); doc.setTextColor(15,23,42);
+      let y = 30;
+      [
+        {l:'Fecha:',v:post.date},
+        {l:'Autor:',v:post.author},
+        {l:'Red Social:',v:post.network}, // INCLUIDO EN PDF
+        {l:'Institución:',v:post.mentioned},
+        {l:'Personas Mencionadas:',v:post.persons||'N/A'},
+        {l:'Categoría:',v:post.category.toUpperCase()},
+        {l:'Estado Actual:',v:currentStatus.label}
+      ].forEach(it=>{ doc.text(it.l,15,y); doc.text(String(it.v),70,y); y+=6; });
+      y+=4; doc.setTextColor(30,120,194); doc.text('Descripción:',15,y); y+=5; doc.setTextColor(15,23,42); const split=doc.splitTextToSize(post.desc,180); doc.text(split,15,y); y+=split.length*5+4;
+      doc.setTextColor(30,120,194); doc.text('Enlace:',15,y); y+=5; doc.setTextColor(15,23,42); doc.text(post.link,15,y); y+=10;
+      if (post.followUp && post.followUp.length){ 
+          doc.setTextColor(30,120,194); doc.text('Historial de Seguimiento:',15,y); y+=5; 
+          const sorted=post.followUp.sort((a,b)=>new Date(b.date)-new Date(a.date)); 
+          sorted.forEach(fu=>{ 
+              const lab=(STATUS_LABELS[fu.status]||{label:fu.status}).label; 
+              doc.setFontSize(9); doc.setTextColor(15,23,42); doc.text(`${fu.date} - ${lab}:`,15,y); y+=5; 
+              doc.setFontSize(8); 
+              const st=doc.splitTextToSize(fu.comment,180); 
+              doc.text(st,15,y); 
+              y+=st.length*4+4; 
+              if(y>280){ doc.addPage(); y=15; } 
+          }); 
+      }
+      const filename = `Reporte_${post.mentioned}_${post.date}.pdf`;
+      doc.save(filename);
+      alert('Se generó el PDF del post. Adjunta este archivo manualmente si lo envías por correo.');
+    }
+
+    // ========== EVENTOS PRINCIPALES ==========
+    document.addEventListener('click', async (e)=>{
+      const t = e.target.closest('button[id], button[data-act]'); if(!t) return;
+
+      // Navegación (Ahora funciona de forma robusta)
+      if(t.id==='tabHome' || t.id==='backHome'){ await syncDB(); showHome(); return; }
+      if(t.id==='tabForm' || t.id==='goNewPost'){ showForm(); return; }
+      if(t.id === 'clearDBBtn'){ await clearAllData(); return; }
+
+      // Exportaciones
+      if(t.id === 'exportExcel'){
+        const allRows = DB; 
+        const mainData = allRows.map(r=>{ 
+            const status = getCurrentStatus(r); 
+            return { 
+                ID_Post: r.id, 
+                Fecha: r.date, 
+                Autor: r.author, 
+                Red_Social: r.network || 'N/A', // 'network' es seguro gracias al FIX 2
+                Institucion_mencionada: r.mentioned, 
+                Personas_mencionadas: r.persons||'N/A', 
+                Categoria_Post: r.category, 
+                Descripcion: r.desc, 
+                Enlace: r.link, 
+                Estado_Actual: status.label 
+            }; 
+        });
+        let followUpData = [];
+        allRows.forEach(r => { (r.followUp || []).forEach(fu => { const statusInfo = STATUS_LABELS[fu.status] || { label: fu.status }; followUpData.push({ ID_Post: r.id, Fecha_Seguimiento: fu.date, Estado: statusInfo.label, Comentario: fu.comment, Autor_Post: r.author, Institucion_Post: r.mentioned, Link_Post: r.link }); }); });
+        const wb = XLSX.utils.book_new(); const wsMain = XLSX.utils.json_to_sheet(mainData); XLSX.utils.book_append_sheet(wb, wsMain, 'Publicaciones Principales'); if(followUpData.length > 0){ const wsFollowUp = XLSX.utils.json_to_sheet(followUpData); XLSX.utils.book_append_sheet(wb, wsFollowUp, 'Log de Seguimiento'); }
+        XLSX.writeFile(wb, 'monitoreo_completo.xlsx'); alert('Exportación a Excel completa.'); return;
+      }
+      if(t.id === 'exportPDFDash'){ await exportDashboardPDF(); return; }
+      if(t.id==='importExcelBtn'){ document.getElementById('excelFile').click(); return; }
+      if(t.id === 'quick7Days' || t.id === 'quickThisMonth'){ setQuickDateFilter(t.dataset.range); return; }
+
+      // Carrusel
+      if(['prevSlide','prevSlide2'].includes(t.id)){ carouselIndex = Math.max(0, carouselIndex-4); renderCarousel(); return; }
+      if(['nextSlide','nextSlide2'].includes(t.id)){ const total = getFiltered().length; if(carouselIndex + 4 < total) carouselIndex += 4; renderCarousel(); return; }
+
+      // Filtros
+      if(t.id==='applyFilters'){ applyFiltersFromUI(); return; }
+      if(t.id==='resetFilters'){ ['fCategory','fDateFrom','fDateTo','fMentioned','fPersons','fAuthor','fTextSearch', 'fFollowUpStatus'].forEach(id=> document.getElementById(id).value=''); FILTERS = {category:'',from:'',to:'',mentioned:'',persons:'',author:'',textSearch:'', followUpStatus:''}; carouselIndex = 0; refreshAll(); return; }
+
+      // Form y tabla
+      if(t.id === 'clearForm'){ document.getElementById('postForm').reset(); editingId=null; const saveBtn=document.getElementById('saveBtn'); if(saveBtn){ saveBtn.classList.remove('secondary'); saveBtn.textContent='Guardar'; } return; }
+      if(t.dataset.act === 'pgPrev'){ TABLE.page = Math.max(1, TABLE.page-1); renderTable(); return; }
+      if(t.dataset.act === 'pgNext'){ TABLE.page = TABLE.page+1; renderTable(); return; }
+
+      // Modal seguimiento
+      if (t.id === 'closeFuModal'){ document.getElementById('followUpModal').style.display = 'none'; return; }
+      if (t.id === 'saveFollowUp'){
+          const postId = document.getElementById('fuPostId').value;
+          const post = DB.find(p => p.id === postId);
+          const status = document.getElementById('fuStatus').value;
+          const comment = document.getElementById('fuComment').value.trim();
+          
+          if (!status || !comment) { alert('El estado y el comentario son obligatorios.'); return; }
+          
+          const newEntry = { id: genId(), date: formatDateISO(new Date()), status, comment, attachment: null };
+          
+          if (post) {
+              post.followUp = post.followUp || [];
+              post.followUp.push(newEntry);
+              await API.update(postId, { followUp: post.followUp });
+              await syncDB(false);
+              renderFollowUpHistory(post);
+              document.getElementById('fuStatus').value = '';
+              document.getElementById('fuComment').value = '';
+              const currentStatus = getCurrentStatus(post); 
+              document.getElementById('currentStatusDisplay').innerHTML = `<span style="font-size:1.1rem; color:${currentStatus.color}; font-weight:700;">Estado Actual: ${currentStatus.label}</span>`;
+              alert('Seguimiento guardado.');
+          }
+          return;
+      }
+
+      // Acciones por fila
+      if(t.dataset.act && t.dataset.id){
+          const id = t.dataset.id;
+          const post = DB.find(p => p.id === id);
+
+          if (t.dataset.act === 'delFu' && t.dataset.fuid) {
+              const fuId = t.dataset.fuid;
+              if (post && confirm('¿Eliminar este registro de seguimiento?')) { post.followUp = (post.followUp || []).filter(fu => fu.id !== fuId); await API.update(id, { followUp: post.followUp }); await syncDB(false); renderFollowUpHistory(post); alert('Seguimiento eliminado.'); }
+              return;
+          }
+          if (t.dataset.act === 'del'){ if(confirm('¿Eliminar este registro?')){ await API.delete(id); await syncDB(); } return; }
+          if (t.dataset.act === 'pdf'){ if (!post) return; await createPdfForPost(post); return; }
+          
+          if (t.dataset.act === 'share'){
+              if (!post) return;
+              
+              // Marcar automáticamente como enviado/compartido en el log
+              post.followUp = post.followUp || [];
+              post.followUp.push({ id: genId(), date: formatDateISO(new Date()), status: 'enviado_compartido', comment: 'Compartido/Enviado (vía sistema de envío o Web Share).', attachment: null });
+              await API.update(id, { followUp: post.followUp });
+              await syncDB(false); // Refrescar la tabla para mostrar el nuevo estado
+              
+              // Abrir diálogo de compartir (Web Share API o fallback)
+              await sharePost(post);
+              return;
+          }
+          
+          if (t.dataset.act === 'edit'){
+              if(post){ 
+                  showForm(); 
+                  ['link','desc','author','category','date','mentioned','persons','network'].forEach(f=>document.getElementById(f).value = post[f] || ''); // 'network' incluido en edición
+                  editingId=post.id; 
+                  const saveBtn=document.getElementById('saveBtn'); 
+                  if(saveBtn){ saveBtn.classList.add('secondary'); saveBtn.textContent='Actualizar'; } 
+                  window.scrollTo({top:0,behavior:'smooth'}); 
+              }
+              return;
+          }
+          if (t.dataset.act === 'followup'){
+              if(post){ 
+                  const currentStatus = getCurrentStatus(post); 
+                  document.getElementById('fuPostId').value = id; 
+                  document.getElementById('fuPostTitle').textContent = `${post.mentioned} (@${post.author})`; 
+                  document.getElementById('currentStatusDisplay').innerHTML = `<span style="font-size:1.1rem; color:${currentStatus.color}; font-weight:700;">Estado Actual: ${currentStatus.label}</span>`; 
+                  renderFollowUpHistory(post); 
+                  document.getElementById('fuStatus').value = ''; 
+                  document.getElementById('fuComment').value = ''; 
+                  document.getElementById('followUpModal').style.display = 'flex'; 
+                  window.scrollTo({top:0,behavior:'smooth'}); 
+              }
+              return;
+          }
+      }
+    });
+    
+    // Autoselección de red social al escribir el link
+    document.getElementById('link').addEventListener('input', (e) => {
+        const link = e.target.value;
+        const network = getSocialNetworkFromLink(link);
+        document.getElementById('network').value = network;
+    });
+
+    // Submit formulario + validación duplicados
+    document.getElementById('postForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const row = {
+        id: editingId || genId(),
+        link: document.getElementById('link').value.trim(),
+        desc: document.getElementById('desc').value.trim(),
+        author: document.getElementById('author').value.trim(),
+        network: document.getElementById('network').value, // NUEVO CAMPO A GUARDAR
+        category: normalizeCategory(document.getElementById('category').value),
+        date: document.getElementById('date').value,
+        mentioned: document.getElementById('mentioned').value, 
+        persons: document.getElementById('persons').value.trim() 
+      };
+      if(!row.link || !row.desc || !row.author || !row.category || !row.date || !row.mentioned || !row.network){ alert('Completa todos los campos obligatorios.'); return; }
+
+      // Duplicados (FIX 2 Aplicado: se pasa el editingId para ignorar el post actual)
+      const dup = isDuplicate(row, editingId);
+      if(!editingId && dup){
+        if(confirm('⚠️ Este post parece estar ya registrado. ¿Deseas abrirlo para edición?')){
+          showForm(); ['link','desc','author','category','date','mentioned','persons','network'].forEach(f=>document.getElementById(f).value = dup[f] || ''); editingId = dup.id; const saveBtn=document.getElementById('saveBtn'); if(saveBtn){ saveBtn.classList.add('secondary'); saveBtn.textContent='Actualizar'; }
+        }
+        return;
+      }
+      
+      if(editingId){ const existingPost = DB.find(p => p.id === editingId); row.followUp = existingPost ? existingPost.followUp : []; await API.update(editingId, row); editingId = null; const saveBtn=document.getElementById('saveBtn'); if(saveBtn){ saveBtn.classList.remove('secondary'); saveBtn.textContent='Guardar'; } }
+      else { row.followUp = [{id: genId(), date: formatDateISO(new Date()), status: 'registrado', comment: 'Registro inicial creado.', attachment: null}]; await API.create(row); }
+      document.getElementById('postForm').reset(); await syncDB(); showHome();
+    });
+
+    // Auxiliares varios
+    async function clearAllData(){ if(confirm('ADVERTENCIA: ¿Eliminar TODOS los registros? Esta acción es irreversible.')){ localStorage.removeItem(LS_KEY); alert('Base reiniciada.'); await syncDB(); showHome(); } }
+    function setQuickDateFilter(range){ const today = new Date(); let fromDate; if (range === '7') { fromDate = new Date(today); fromDate.setDate(today.getDate() - 7); } else if (range === 'month') { fromDate = new Date(today.getFullYear(), today.getMonth(), 1); } else { return; } document.getElementById('fDateFrom').value = formatDateISO(fromDate); document.getElementById('fDateTo').value = formatDateISO(today); applyFiltersFromUI(); }
+    function applyFiltersFromUI(){ FILTERS.category = document.getElementById('fCategory').value || ''; FILTERS.followUpStatus = document.getElementById('fFollowUpStatus').value || ''; FILTERS.from = document.getElementById('fDateFrom').value || ''; FILTERS.to = document.getElementById('fDateTo').value || ''; FILTERS.mentioned = document.getElementById('fMentioned').value.trim(); FILTERS.persons = document.getElementById('fPersons').value.trim(); FILTERS.author = document.getElementById('fAuthor').value.trim(); FILTERS.textSearch = document.getElementById('fTextSearch').value.trim(); carouselIndex = 0; refreshAll(); }
+    function populateInstitutions(){ const select = document.getElementById('mentioned'); const frag = document.createDocumentFragment(); select.innerHTML = '<option value="">Selecciona institución…</option>'; INSTITUTIONS.forEach(name=>{ const opt = document.createElement('option'); opt.value = name; opt.textContent = name; frag.appendChild(opt); }); select.appendChild(frag); }
+
+    // Inicialización
+    (async ()=>{ populateInstitutions(); await syncDB(); showHome(); document.getElementById('pageSize').addEventListener('change', (e)=>{ TABLE.size = parseInt(e.target.value,10)||10; TABLE.page=1; renderTable(); }); document.getElementById('tableSearch').addEventListener('input', (e)=>{ TABLE.q = e.target.value; TABLE.page=1; renderTable(); }); document.getElementById('tableField').addEventListener('change', (e)=>{ TABLE.field = e.target.value; TABLE.page=1; renderTable(); }); document.getElementById('excelFile').addEventListener('change', async (e)=>{ const file=e.target.files[0]; if(!file) return; const data=await file.arrayBuffer(); const wb=XLSX.read(data); const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws); const mapped=rows.map(r=>({ id: genId(), date: r.Fecha||formatDateISO(new Date()), author: r.Autor||'', network: r.Red_Social || 'Web/Otro', mentioned: r.Institucion_mencionada||'', persons: r.Personas_mencionadas||'', category: normalizeCategory(r.Categoria_Post||''), desc: r.Descripcion||'', link: r.Enlace||'', followUp: [{id: genId(), date: formatDateISO(new Date()), status: 'registrado', comment: 'Importado desde Excel.', attachment: null}] })); const cur = await API.list(); localStorage.setItem(LS_KEY, JSON.stringify(cur.concat(mapped))); await syncDB(); alert('Importación completa.'); }); })();
+  </script>
+
+</body>
+</html>
